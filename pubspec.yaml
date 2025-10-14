@@ -1,0 +1,27 @@
+name: unid2_flutter
+description: "Proyecto Flutter básico con Firebase"
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.9.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 🔥 Firebase actualizado (compatible con Flutter 3.9.x)
+  firebase_core: ^3.4.0
+  firebase_auth: ^5.3.1
+
+  # Íconos y utilidades
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true

@@ -40,49 +40,54 @@ class DefaultFirebaseOptions {
     }
   }
 
+  // 🌐 Web
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyCF0_TV9msN67VV0WVUsreSxKndrmXz4Yg',
-    appId: '1:337796922523:web:26d7ca673e1d743d4c1a3e',
-    messagingSenderId: '337796922523',
-    projectId: 'gestor-de-datos-b590a',
-    authDomain: 'gestor-de-datos-b590a.firebaseapp.com',
-    storageBucket: 'gestor-de-datos-b590a.firebasestorage.app',
-    measurementId: 'G-8H3PY4NPZP',
+    apiKey: 'AIzaSyAmBUYIJlAxLswq4IFx0M39wJTuUufq3iI',
+    appId: '1:173375782011:web:TU_APP_ID_WEB', // reemplaza TU_APP_ID_WEB con el que te da Firebase al crear la Web App
+    messagingSenderId: '173375782011',
+    projectId: 'unid2flutter',
+    authDomain: 'unid2flutter.firebaseapp.com',
+    storageBucket: 'unid2flutter.appspot.com',
+    measurementId: 'G-XXXXXXXXXX', // opcional
   );
 
+  // 🤖 Android
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyCM-Z7S0ntk5FcL-kvsnXy40-MmsA-3KK4',
-    appId: '1:337796922523:android:1205453b019f9da64c1a3e',
-    messagingSenderId: '337796922523',
-    projectId: 'gestor-de-datos-b590a',
-    storageBucket: 'gestor-de-datos-b590a.firebasestorage.app',
+    apiKey: 'AIzaSyAmBUYIJlAxLswq4IFx0M39wJTuUufq3iI',
+    appId: '1:173375782011:android:c38cb553a8d4f04c18b6de',
+    messagingSenderId: '173375782011',
+    projectId: 'unid2flutter',
+    storageBucket: 'unid2flutter.appspot.com',
   );
 
+  // 🍏 iOS
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyBQu4a_gYEs0l5esALtKWjCgQzFCO7KP2M',
-    appId: '1:337796922523:ios:ba2403ea7ec90b2b4c1a3e',
-    messagingSenderId: '337796922523',
-    projectId: 'gestor-de-datos-b590a',
-    storageBucket: 'gestor-de-datos-b590a.firebasestorage.app',
-    iosBundleId: 'com.example.unid2Flutter',
+    apiKey: 'AIzaSyAmBUYIJlAxLswq4IFx0M39wJTuUufq3iI',
+    appId: '1:173375782011:ios:c38cb553a8d4f04c18b6de',
+    messagingSenderId: '173375782011',
+    projectId: 'unid2flutter',
+    storageBucket: 'unid2flutter.appspot.com',
+    iosBundleId: 'com.example.unid2_flutter',
   );
 
+  // 🍏 macOS
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'AIzaSyBQu4a_gYEs0l5esALtKWjCgQzFCO7KP2M',
-    appId: '1:337796922523:ios:ba2403ea7ec90b2b4c1a3e',
-    messagingSenderId: '337796922523',
-    projectId: 'gestor-de-datos-b590a',
-    storageBucket: 'gestor-de-datos-b590a.firebasestorage.app',
-    iosBundleId: 'com.example.unid2Flutter',
+    apiKey: 'AIzaSyAmBUYIJlAxLswq4IFx0M39wJTuUufq3iI',
+    appId: '1:173375782011:ios:c38cb553a8d4f04c18b6de',
+    messagingSenderId: '173375782011',
+    projectId: 'unid2flutter',
+    storageBucket: 'unid2flutter.appspot.com',
+    iosBundleId: 'com.example.unid2_flutter',
   );
 
+  // 🪟 Windows
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyCF0_TV9msN67VV0WVUsreSxKndrmXz4Yg',
-    appId: '1:337796922523:web:160647a1d4c86ed34c1a3e',
-    messagingSenderId: '337796922523',
-    projectId: 'gestor-de-datos-b590a',
-    authDomain: 'gestor-de-datos-b590a.firebaseapp.com',
-    storageBucket: 'gestor-de-datos-b590a.firebasestorage.app',
-    measurementId: 'G-HTHKM354QC',
+    apiKey: 'AIzaSyAmBUYIJlAxLswq4IFx0M39wJTuUufq3iI',
+    appId: '1:173375782011:windows:c38cb553a8d4f04c18b6de',
+    messagingSenderId: '173375782011',
+    projectId: 'unid2flutter',
+    authDomain: 'unid2flutter.firebaseapp.com',
+    storageBucket: 'unid2flutter.appspot.com',
+    measurementId: 'G-XXXXXXXXXX',
   );
 }

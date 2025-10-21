@@ -5,43 +5,40 @@ class MessagesPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Messages"),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 0,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          children: [
-            TextField(
-              decoration: InputDecoration(
-                hintText: "Search",
-                prefixIcon: const Icon(Icons.search),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+    return SafeArea(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Messages')),
+        body: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            children: [
+              TextField(
+                decoration: InputDecoration(
+                  hintText: 'Buscar',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
-            ),
-            const SizedBox(height: 15),
-            Expanded(
-              child: ListView.builder(
-                itemCount: 6,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    leading: const CircleAvatar(
-                      backgroundImage: AssetImage("assets/images/doctor.png"),
-                    ),
-                    title: const Text("Doctor Name"),
-                    subtitle: const Text("Hello, Doctor, are you there?"),
-                    trailing: const Text("12:30"),
-                  );
-                },
-              ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: 7,
+                  separatorBuilder: (_, __) => const Divider(),
+                  itemBuilder: (context, i) {
+                    return ListTile(
+                      leading: const CircleAvatar(backgroundImage: AssetImage('assets/images/doctor.png')),
+                      title: const Text('Doctor Name'),
+                      subtitle: const Text('Hola, ¿estás disponible?'),
+                      trailing: const Text('12:30', style: TextStyle(color: Colors.grey)),
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Abrir chat (no implementado)')));
+                      },
+                    );
+                  },
+                ),
+              )
+            ],
+          ),
         ),
       ),
     );

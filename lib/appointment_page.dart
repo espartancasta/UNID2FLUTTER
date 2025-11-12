@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// 🔹 MODELO DE CITA (Define la estructura de los datos)
+/// 🔹 MODELO DE CITA
 class Appointment {
   String id;
   String title;
@@ -17,7 +17,6 @@ class Appointment {
     required this.notes,
   });
 
-  /// Convierte el objeto Appointment a un mapa para guardarlo en Firebase
   Map<String, dynamic> toMap() {
     return {
       'title': title,
@@ -27,7 +26,6 @@ class Appointment {
     };
   }
 
-  /// Crea una instancia de Appointment a partir de un mapa (datos de Firestore)
   factory Appointment.fromMap(String id, Map<String, dynamic> map) {
     return Appointment(
       id: id,
@@ -39,59 +37,71 @@ class Appointment {
   }
 }
 
-/// 🔹 PÁGINA PRINCIPAL DE CITAS (READ - Lista)
-class AppointmentPage extends StatelessWidget {
+/// 🔹 PÁGINA PRINCIPAL DE CITAS
+class AppointmentPage extends StatefulWidget {
   const AppointmentPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final CollectionReference appointmentsRef =
-        FirebaseFirestore.instance.collection('appointments');
+  State<AppointmentPage> createState() => _AppointmentPageState();
+}
 
+class _AppointmentPageState extends State<AppointmentPage> {
+  final CollectionReference appointmentsRef =
+      FirebaseFirestore.instance.collection('appointments');
+
+  /// Método para forzar la recarga
+  Future<void> _refreshAppointments() async {
+    setState(() {}); // fuerza reconstrucción del StreamBuilder
+    await Future.delayed(const Duration(milliseconds: 400));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0A), // Fondo negro para resaltar los neones
+      backgroundColor: const Color(0xFF0A0A0A),
       appBar: AppBar(
         title: const Text('💫 Tus Citas Médicas'),
-        backgroundColor: const Color(0xFF8A2BE2), // Morado neón
+        backgroundColor: const Color(0xFF8A2BE2),
         elevation: 10,
         shadowColor: const Color(0xFFFF00FF),
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
-        child: StreamBuilder<QuerySnapshot>(
-          stream: appointmentsRef.snapshots(),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF00FFFF)));
-            }
+        child: RefreshIndicator(
+          onRefresh: _refreshAppointments, // 🔹 Gesto 1: recargar al deslizar
+          child: StreamBuilder<QuerySnapshot>(
+            stream: appointmentsRef.snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF00FFFF)));
+              }
 
-            if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-              return const Center(
-                child: Text(
-                  '⚡ No tienes citas agendadas.',
-                  style: TextStyle(color: Colors.white70, fontSize: 18),
-                ),
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return const Center(
+                  child: Text(
+                    '⚡ No tienes citas agendadas.',
+                    style: TextStyle(color: Colors.white70, fontSize: 18),
+                  ),
+                );
+              }
+
+              final appointments = snapshot.data!.docs
+                  .map((doc) => Appointment.fromMap(
+                      doc.id, doc.data() as Map<String, dynamic>))
+                  .toList();
+
+              return ListView.builder(
+                itemCount: appointments.length,
+                itemBuilder: (context, index) {
+                  final appt = appointments[index];
+                  return _buildAppointmentCard(context, appt);
+                },
               );
-            }
-
-            final appointments = snapshot.data!.docs
-                .map((doc) =>
-                    Appointment.fromMap(doc.id, doc.data() as Map<String, dynamic>))
-                .toList();
-
-            return ListView.builder(
-              itemCount: appointments.length,
-              itemBuilder: (context, index) {
-                final appt = appointments[index];
-                return _buildAppointmentCard(context, appt, appointmentsRef);
-              },
-            );
-          },
+            },
+          ),
         ),
       ),
-
-      /// Botón flotante de agregar cita
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF00FFFF),
         onPressed: () {
@@ -105,18 +115,31 @@ class AppointmentPage extends StatelessWidget {
     );
   }
 
-  /// 🔹 Tarjeta visual para mostrar cada cita
-  Widget _buildAppointmentCard(
-      BuildContext context, Appointment appt, CollectionReference appointmentsRef) {
-    return Card(
-      color: const Color(0xFF1A1A1A),
-      margin: const EdgeInsets.only(bottom: 14),
-      elevation: 6,
-      shadowColor: const Color(0xFF00FFFF),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      child: ListTile(
+  /// 🔹 Tarjeta visual con gestos integrados
+  Widget _buildAppointmentCard(BuildContext context, Appointment appt) {
+    return Dismissible(
+      key: Key(appt.id),
+      direction: DismissDirection.endToStart,
+      onDismissed: (direction) async {
+        // 🔹 Gesto 2: deslizar para eliminar
+        await FirebaseFirestore.instance
+            .collection('appointments')
+            .doc(appt.id)
+            .delete();
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${appt.title} eliminada')),
+        );
+      },
+      background: Container(
+        color: Colors.redAccent,
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        child: const Icon(Icons.delete, color: Colors.white),
+      ),
+      child: GestureDetector(
+        // 🔹 Gesto 3: detectar tap y long press
         onTap: () {
-          // Navegar al detalle de la cita
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -124,78 +147,40 @@ class AppointmentPage extends StatelessWidget {
             ),
           );
         },
-        leading: const CircleAvatar(
-          backgroundColor: Color(0xFF8A2BE2),
-          child: Icon(Icons.local_hospital, color: Colors.white),
-        ),
-        title: Text(
-          appt.title,
-          style: const TextStyle(
-              fontWeight: FontWeight.bold, color: Color(0xFFFF00FF)),
-        ),
-        subtitle: Text(
-          '${appt.doctor}\n${appt.date.day}/${appt.date.month}/${appt.date.year} • ${appt.date.hour}:${appt.date.minute.toString().padLeft(2, '0')}',
-          style: const TextStyle(color: Colors.white70),
-        ),
-        isThreeLine: true,
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            /// Botón editar (UPDATE)
-            IconButton(
-              icon: const Icon(Icons.edit, color: Color(0xFF00FFFF)),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CreateEditAppointmentPage(appointment: appt),
-                  ),
-                );
-              },
+        onLongPress: () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Has presionado largo en ${appt.title}')),
+          );
+        },
+        child: Card(
+          color: const Color(0xFF1A1A1A),
+          margin: const EdgeInsets.only(bottom: 14),
+          elevation: 6,
+          shadowColor: const Color(0xFF00FFFF),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          child: ListTile(
+            leading: const CircleAvatar(
+              backgroundColor: Color(0xFF8A2BE2),
+              child: Icon(Icons.local_hospital, color: Colors.white),
             ),
-
-            /// Botón eliminar (DELETE)
-            IconButton(
-              icon: const Icon(Icons.delete, color: Color(0xFFFF007F)),
-              onPressed: () async {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    backgroundColor: const Color(0xFF1E1E1E),
-                    title: const Text('Eliminar cita',
-                        style: TextStyle(color: Colors.white)),
-                    content: const Text(
-                      '¿Estás seguro que quieres eliminar esta cita?',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancelar',
-                            style: TextStyle(color: Color(0xFF00FFFF))),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Eliminar',
-                            style: TextStyle(color: Color(0xFFFF007F))),
-                      ),
-                    ],
-                  ),
-                );
-
-                if (confirm == true) {
-                  await appointmentsRef.doc(appt.id).delete();
-                }
-              },
+            title: Text(
+              appt.title,
+              style: const TextStyle(
+                  fontWeight: FontWeight.bold, color: Color(0xFFFF00FF)),
             ),
-          ],
+            subtitle: Text(
+              '${appt.doctor}\n${appt.date.day}/${appt.date.month}/${appt.date.year} • ${appt.date.hour}:${appt.date.minute.toString().padLeft(2, '0')}',
+              style: const TextStyle(color: Colors.white70),
+            ),
+            isThreeLine: true,
+          ),
         ),
       ),
     );
   }
 }
 
-/// 🔹 FORMULARIO PARA CREAR O EDITAR CITAS
+/// 🔹 FORMULARIO DE CREAR/EDITAR CITAS (igual que antes)
 class CreateEditAppointmentPage extends StatefulWidget {
   final Appointment? appointment;
   const CreateEditAppointmentPage({this.appointment, super.key});
@@ -245,14 +230,11 @@ class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
           key: _formKey,
           child: ListView(
             children: [
-              /// Campos de texto
               _buildInputField(_titleController, 'Motivo'),
               _buildInputField(_doctorController, 'Médico'),
               _buildInputField(_notesController, 'Notas', maxLines: 2),
-
               const SizedBox(height: 20),
 
-              /// Selector de fecha
               _buildPickerTile(
                 context,
                 icon: Icons.calendar_today,
@@ -269,8 +251,6 @@ class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
                   if (picked != null) setState(() => _selectedDate = picked);
                 },
               ),
-
-              /// Selector de hora
               _buildPickerTile(
                 context,
                 icon: Icons.access_time,
@@ -286,10 +266,8 @@ class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
                   if (picked != null) setState(() => _selectedTime = picked);
                 },
               ),
-
               const SizedBox(height: 30),
 
-              /// Botón Guardar/Actualizar
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00FFFF),
@@ -311,7 +289,6 @@ class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
                     );
 
                     if (widget.appointment == null) {
-                      // Crear nueva cita
                       await appointmentsRef.add(Appointment(
                         id: '',
                         title: _titleController.text,
@@ -320,7 +297,6 @@ class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
                         notes: _notesController.text,
                       ).toMap());
                     } else {
-                      // Actualizar cita existente
                       await appointmentsRef.doc(widget.appointment!.id).update(
                             Appointment(
                               id: widget.appointment!.id,
@@ -343,7 +319,6 @@ class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
     );
   }
 
-  /// Widget auxiliar para campos de texto con estilo neón
   Widget _buildInputField(TextEditingController controller, String label,
       {int maxLines = 1}) {
     return TextFormField(
@@ -364,7 +339,6 @@ class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
     );
   }
 
-  /// Widget auxiliar para los selectores de fecha/hora
   Widget _buildPickerTile(BuildContext context,
       {required IconData icon, required String label, required VoidCallback onTap}) {
     return ListTile(
@@ -375,7 +349,7 @@ class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
   }
 }
 
-/// 🔹 DETALLE DE CITA (READ - Detallado)
+/// 🔹 DETALLE DE CITA
 class AppointmentDetailPage extends StatelessWidget {
   final Appointment appointment;
   const AppointmentDetailPage({required this.appointment, super.key});
@@ -407,37 +381,12 @@ class AppointmentDetailPage extends StatelessWidget {
                 '${appointment.date.hour}:${appointment.date.minute.toString().padLeft(2, '0')}'),
             _buildDetailRow(Icons.notes, 'Notas',
                 appointment.notes.isEmpty ? 'Ninguna' : appointment.notes),
-
-            const SizedBox(height: 30),
-
-            /// Botón para editar desde el detalle
-            Center(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            CreateEditAppointmentPage(appointment: appointment)),
-                  );
-                },
-                icon: const Icon(Icons.edit, color: Colors.black),
-                label: const Text('Editar Cita'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00FFFF),
-                  foregroundColor: Colors.black,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                ),
-              ),
-            ),
           ],
         ),
       ),
     );
   }
 
-  /// Componente visual para mostrar información detallada
   Widget _buildDetailRow(IconData icon, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10.0),

@@ -5,6 +5,8 @@ import 'profile_page.dart';
 import 'settings_page.dart';
 import 'appointment_page.dart';
 import 'tips_page.dart';
+import 'package:flutter/material.dart';
+
 
 class HomePage extends StatefulWidget {
   final User? user;

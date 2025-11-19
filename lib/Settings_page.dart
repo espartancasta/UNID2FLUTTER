@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'profile_page.dart';
+import 'package:flutter/material.dart';
+
 
 /// PÁGINA DE CONFIGURACIÓN CON ESTILO NEÓN
 class SettingsPage extends StatelessWidget {

@@ -51,7 +51,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
 
   /// Método para forzar la recarga
   Future<void> _refreshAppointments() async {
-    setState(() {}); // fuerza reconstrucción del StreamBuilder
+    setState(() {});
     await Future.delayed(const Duration(milliseconds: 400));
   }
 
@@ -68,7 +68,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: RefreshIndicator(
-          onRefresh: _refreshAppointments, // 🔹 Gesto 1: recargar al deslizar
+          onRefresh: _refreshAppointments,
           child: StreamBuilder<QuerySnapshot>(
             stream: appointmentsRef.snapshots(),
             builder: (context, snapshot) {
@@ -121,7 +121,6 @@ class _AppointmentPageState extends State<AppointmentPage> {
       key: Key(appt.id),
       direction: DismissDirection.endToStart,
       onDismissed: (direction) async {
-        // 🔹 Gesto 2: deslizar para eliminar
         await FirebaseFirestore.instance
             .collection('appointments')
             .doc(appt.id)
@@ -138,8 +137,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       child: GestureDetector(
-        // 🔹 Gesto 3: detectar tap y long press
-        onTap: () {
+        onLongPressStart: (_) {
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -147,17 +145,16 @@ class _AppointmentPageState extends State<AppointmentPage> {
             ),
           );
         },
-        onLongPress: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Has presionado largo en ${appt.title}')),
-          );
+        onLongPressEnd: (_) {
+          Navigator.pop(context);
         },
         child: Card(
           color: const Color(0xFF1A1A1A),
           margin: const EdgeInsets.only(bottom: 14),
           elevation: 6,
           shadowColor: const Color(0xFF00FFFF),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18)),
           child: ListTile(
             leading: const CircleAvatar(
               backgroundColor: Color(0xFF8A2BE2),
@@ -180,7 +177,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
   }
 }
 
-/// 🔹 FORMULARIO DE CREAR/EDITAR CITAS (igual que antes)
+/// 🔹 FORMULARIO DE CREAR/EDITAR CITAS
 class CreateEditAppointmentPage extends StatefulWidget {
   final Appointment? appointment;
   const CreateEditAppointmentPage({this.appointment, super.key});
@@ -190,7 +187,8 @@ class CreateEditAppointmentPage extends StatefulWidget {
       _CreateEditAppointmentPageState();
 }
 
-class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
+class _CreateEditAppointmentPageState
+    extends State<CreateEditAppointmentPage> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _titleController;
   late TextEditingController _doctorController;
@@ -201,10 +199,12 @@ class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
   @override
   void initState() {
     super.initState();
-    _titleController = TextEditingController(text: widget.appointment?.title ?? '');
+    _titleController =
+        TextEditingController(text: widget.appointment?.title ?? '');
     _doctorController =
         TextEditingController(text: widget.appointment?.doctor ?? '');
-    _notesController = TextEditingController(text: widget.appointment?.notes ?? '');
+    _notesController =
+        TextEditingController(text: widget.appointment?.notes ?? '');
     _selectedDate = widget.appointment?.date;
     _selectedTime = widget.appointment != null
         ? TimeOfDay(
@@ -310,7 +310,8 @@ class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
                     Navigator.pop(context);
                   }
                 },
-                child: Text(widget.appointment == null ? 'Guardar' : 'Actualizar'),
+                child: Text(
+                    widget.appointment == null ? 'Guardar' : 'Actualizar'),
               ),
             ],
           ),
@@ -335,12 +336,15 @@ class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
           borderSide: BorderSide(color: Color(0xFFFF00FF), width: 2),
         ),
       ),
-      validator: (value) => value == null || value.isEmpty ? 'Obligatorio' : null,
+      validator: (value) =>
+          value == null || value.isEmpty ? 'Obligatorio' : null,
     );
   }
 
   Widget _buildPickerTile(BuildContext context,
-      {required IconData icon, required String label, required VoidCallback onTap}) {
+      {required IconData icon,
+      required String label,
+      required VoidCallback onTap}) {
     return ListTile(
       leading: Icon(icon, color: const Color(0xFF00FFFF)),
       title: Text(label, style: const TextStyle(color: Colors.white70)),
@@ -373,7 +377,6 @@ class AppointmentDetailPage extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     color: Color(0xFFFF00FF))),
             const Divider(color: Color(0xFF00FFFF)),
-
             _buildDetailRow(Icons.person, 'Médico', appointment.doctor),
             _buildDetailRow(Icons.calendar_today, 'Fecha',
                 '${appointment.date.day}/${appointment.date.month}/${appointment.date.year}'),
@@ -405,8 +408,7 @@ class AppointmentDetailPage extends StatelessWidget {
               SizedBox(
                 width: 300,
                 child: Text(value,
-                    style:
-                        const TextStyle(fontSize: 16, color: Colors.white)),
+                    style: const TextStyle(fontSize: 16, color: Colors.white)),
               ),
             ],
           ),

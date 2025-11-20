@@ -49,7 +49,6 @@ class _AppointmentPageState extends State<AppointmentPage> {
   final CollectionReference appointmentsRef =
       FirebaseFirestore.instance.collection('appointments');
 
-  /// Método para forzar la recarga
   Future<void> _refreshAppointments() async {
     setState(() {});
     await Future.delayed(const Duration(milliseconds: 400));
@@ -104,27 +103,27 @@ class _AppointmentPageState extends State<AppointmentPage> {
       ),
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF00FFFF),
-        onPressed: () {
-          Navigator.push(
+        onPressed: () async {
+          // 🔹 Esperar a que se cierre la pantalla de crear para refrescar
+          await Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const CreateEditAppointmentPage()),
+            MaterialPageRoute(
+                builder: (_) => const CreateEditAppointmentPage()),
           );
+          setState(() {});
         },
         child: const Icon(Icons.add, color: Colors.black),
       ),
     );
   }
 
-  /// 🔹 Tarjeta visual con gestos integrados
+  /// 🔹 Tarjeta de cita con gestos y botones
   Widget _buildAppointmentCard(BuildContext context, Appointment appt) {
     return Dismissible(
       key: Key(appt.id),
       direction: DismissDirection.endToStart,
       onDismissed: (direction) async {
-        await FirebaseFirestore.instance
-            .collection('appointments')
-            .doc(appt.id)
-            .delete();
+        await appointmentsRef.doc(appt.id).delete();
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${appt.title} eliminada')),
@@ -137,7 +136,7 @@ class _AppointmentPageState extends State<AppointmentPage> {
         child: const Icon(Icons.delete, color: Colors.white),
       ),
       child: GestureDetector(
-        onLongPressStart: (_) {
+        onLongPress: () {
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -145,17 +144,14 @@ class _AppointmentPageState extends State<AppointmentPage> {
             ),
           );
         },
-        onLongPressEnd: (_) {
-          Navigator.pop(context);
-        },
         child: Card(
           color: const Color(0xFF1A1A1A),
           margin: const EdgeInsets.only(bottom: 14),
           elevation: 6,
           shadowColor: const Color(0xFF00FFFF),
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
             leading: const CircleAvatar(
               backgroundColor: Color(0xFF8A2BE2),
               child: Icon(Icons.local_hospital, color: Colors.white),
@@ -170,6 +166,49 @@ class _AppointmentPageState extends State<AppointmentPage> {
               style: const TextStyle(color: Colors.white70),
             ),
             isThreeLine: true,
+            trailing: SizedBox(
+              width: 150,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit, color: Colors.yellowAccent),
+                    onPressed: () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              CreateEditAppointmentPage(appointment: appt),
+                        ),
+                      );
+                      setState(() {}); // 🔹 refresca dashboard
+                    },
+                  ),
+                  IconButton(
+                    icon:
+                        const Icon(Icons.remove_red_eye, color: Colors.cyanAccent),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              AppointmentDetailPage(appointment: appt),
+                        ),
+                      );
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.redAccent),
+                    onPressed: () async {
+                      await appointmentsRef.doc(appt.id).delete();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('${appt.title} eliminada')),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -234,7 +273,6 @@ class _CreateEditAppointmentPageState
               _buildInputField(_doctorController, 'Médico'),
               _buildInputField(_notesController, 'Notas', maxLines: 2),
               const SizedBox(height: 20),
-
               _buildPickerTile(
                 context,
                 icon: Icons.calendar_today,
@@ -267,7 +305,6 @@ class _CreateEditAppointmentPageState
                 },
               ),
               const SizedBox(height: 30),
-
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00FFFF),
@@ -307,7 +344,7 @@ class _CreateEditAppointmentPageState
                             ).toMap(),
                           );
                     }
-                    Navigator.pop(context);
+                    Navigator.pop(context); // 🔹 vuelve al dashboard
                   }
                 },
                 child: Text(

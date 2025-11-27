@@ -21,6 +21,9 @@ dependencies:
   # 👉 Necesario para DateFormat
   intl: ^0.19.0
 
+  # 👉 Librería de gráficas recomendada
+  fl_chart: ^0.68.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

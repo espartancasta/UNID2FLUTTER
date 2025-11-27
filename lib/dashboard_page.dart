@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+
+// 👇 Importamos tu pantalla de citas con alias "ap"
+import 'appointment_page.dart' as ap;
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -11,33 +13,43 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
-  final uid = FirebaseAuth.instance.currentUser?.uid;
+  // Helper para parsear la fecha venga como venga
+  DateTime? _parseDate(dynamic value) {
+    if (value == null) return null;
+    if (value is Timestamp) return value.toDate();
+    if (value is DateTime) return value;
+    if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+    if (value is String) return DateTime.tryParse(value);
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (uid == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Dashboard')),
-        body: const Center(child: Text('Debes iniciar sesión')),
-      );
-    }
-
+    // Tomamos todas las citas; para la tarea es suficiente
     final appointmentsQuery = FirebaseFirestore.instance
         .collection('appointments')
-        .where('doctorId', isEqualTo: uid)
-        .orderBy('date', descending: false); // asume campo 'date' tipo Timestamp
+        .orderBy('date', descending: false);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dashboard Médico'),
+        title: const Text(
+          'Dashboard Médico',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: const Color(0xFF0A0A0A),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       backgroundColor: const Color(0xFF0A0A0A),
       body: StreamBuilder<QuerySnapshot>(
         stream: appointmentsQuery.snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
-            return Center(child: Text('Error: ${snapshot.error}'));
+            return Center(
+              child: Text(
+                'Error: ${snapshot.error}',
+                style: const TextStyle(color: Colors.redAccent),
+              ),
+            );
           }
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
@@ -46,17 +58,20 @@ class _DashboardPageState extends State<DashboardPage> {
           final docs = snapshot.data!.docs;
           final totalAppointments = docs.length;
 
-          final now = Timestamp.now();
-          // próximas: fecha > ahora (future) y status != 'completed' (ajusta status según tu modelo)
+          final now = DateTime.now();
+
+          // Próximas citas: fecha futura y no completed/cancelled
           final upcoming = docs.where((d) {
             final data = d.data() as Map<String, dynamic>;
-            final ts = data['date'] as Timestamp?;
+            final date = _parseDate(data['date']);
             final status = (data['status'] ?? '').toString().toLowerCase();
-            if (ts == null) return false;
-            return ts.compareTo(now) > 0 && status != 'completed' && status != 'cancelled';
+            if (date == null) return false;
+            return date.isAfter(now) &&
+                status != 'completed' &&
+                status != 'cancelled';
           }).toList();
 
-          // pacientes únicos
+          // Pacientes únicos por patientId (si no tienes este campo se queda en 0 y no truena)
           final patients = <String>{};
           for (var d in docs) {
             final data = d.data() as Map<String, dynamic>;
@@ -65,11 +80,13 @@ class _DashboardPageState extends State<DashboardPage> {
           }
           final totalPatients = patients.length;
 
-          // tomamos las próximas 3 citas para mostrar
-          final upcomingSorted = List.from(upcoming);
+          // Ordenamos las próximas citas por fecha
+          final upcomingSorted = List<QueryDocumentSnapshot>.from(upcoming);
           upcomingSorted.sort((a, b) {
-            final da = (a.data() as Map<String, dynamic>)['date'] as Timestamp?;
-            final db = (b.data() as Map<String, dynamic>)['date'] as Timestamp?;
+            final da = _parseDate(
+                (a.data() as Map<String, dynamic>)['date']);
+            final db = _parseDate(
+                (b.data() as Map<String, dynamic>)['date']);
             if (da == null || db == null) return 0;
             return da.compareTo(db);
           });
@@ -77,32 +94,50 @@ class _DashboardPageState extends State<DashboardPage> {
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Row de indicadores
+                // Tarjetas de estadísticas
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _statCard('Total citas', totalAppointments.toString(), Icons.calendar_today),
-                    _statCard('Citas próximas', upcoming.length.toString(), Icons.schedule),
-                    _statCard('Pacientes', totalPatients.toString(), Icons.person),
+                    _statCard('Total citas', totalAppointments.toString(),
+                        Icons.calendar_today),
+                    _statCard('Citas próximas', upcoming.length.toString(),
+                        Icons.schedule),
+                    _statCard('Pacientes', totalPatients.toString(),
+                        Icons.person),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 24),
 
-                // Lista de próximas citas
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Próximas citas',
-                      style: TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(height: 10),
-                for (var i = 0; i < (upcomingSorted.length < 5 ? upcomingSorted.length : 5); i++)
-                  _appointmentTile(upcomingSorted[i]),
-                if (upcomingSorted.isEmpty)
-                  Container(
-                    margin: const EdgeInsets.only(top: 24),
-                    child: const Text('No hay citas próximas.', style: TextStyle(color: Colors.white70)),
+                const Text(
+                  'Próximas citas',
+                  style: TextStyle(
+                    color: Colors.cyanAccent,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 18,
                   ),
+                ),
+                const SizedBox(height: 12),
+
+                if (upcomingSorted.isEmpty)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 24),
+                      child: Text(
+                        'No hay citas próximas.',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                    ),
+                  )
+                else
+                  for (var i = 0;
+                      i <
+                          (upcomingSorted.length < 5
+                              ? upcomingSorted.length
+                              : 5);
+                      i++)
+                    _appointmentTile(context, upcomingSorted[i]),
               ],
             ),
           );
@@ -119,13 +154,20 @@ class _DashboardPageState extends State<DashboardPage> {
         decoration: BoxDecoration(
           color: const Color(0xFF1A1A1A),
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: Colors.white12, blurRadius: 8)],
+          boxShadow: const [BoxShadow(color: Colors.white12, blurRadius: 8)],
         ),
         child: Column(
           children: [
             Icon(icon, size: 32, color: Colors.cyanAccent),
             const SizedBox(height: 8),
-            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
             const SizedBox(height: 6),
             Text(title, style: const TextStyle(color: Colors.white70)),
           ],
@@ -134,12 +176,34 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _appointmentTile(QueryDocumentSnapshot doc) {
+  // ----------------------------------------------------------
+  // Tile de próxima cita: al tocar, abre AppointmentDetailPage
+  // ----------------------------------------------------------
+  Widget _appointmentTile(BuildContext context, QueryDocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    final ts = data['date'] as Timestamp?;
-    final dateStr = ts != null ? DateFormat('dd/MM/yyyy HH:mm').format(ts.toDate()) : 'Sin fecha';
-    final patientName = data['patientName'] ?? data['patientId'] ?? 'Paciente';
-    final status = data['status'] ?? 'pendiente';
+    final date = _parseDate(data['date']);
+    final dateStr = date != null
+        ? DateFormat('dd/MM/yyyy HH:mm').format(date)
+        : 'Sin fecha';
+
+    // Campos de la cita
+    final title = (data['title'] ?? 'Cita médica').toString();
+    final doctor = (data['doctor'] ?? 'Médico').toString();
+    final notes = (data['notes'] ?? '').toString();
+    final status = (data['status'] ?? 'pending').toString();
+
+    // Nombre que mostramos en la lista
+    final displayName = data['patientName'] ?? data['patientId'] ?? 'Paciente';
+
+    // Construimos el Appointment que usa tu AppointmentDetailPage
+    final appt = ap.Appointment(
+      id: doc.id,
+      title: title,
+      doctor: doctor,
+      date: date ?? DateTime.now(),
+      notes: notes,
+      status: status,
+    );
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -150,14 +214,23 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
       child: ListTile(
         leading: const Icon(Icons.person, color: Colors.white),
-        title: Text(patientName, style: const TextStyle(color: Colors.white)),
-        subtitle: Text('$dateStr • ${status.toString()}', style: const TextStyle(color: Colors.white70)),
-        trailing: IconButton(
-          icon: const Icon(Icons.arrow_forward_ios, color: Colors.white70),
-          onPressed: () {
-            // Aquí podrías navegar a una página de detalles de cita
-          },
+        title: Text(
+          displayName.toString(),
+          style: const TextStyle(color: Colors.white),
         ),
+        subtitle: Text(
+          '$dateStr • $status',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ap.AppointmentDetailPage(appointment: appt),
+            ),
+          );
+        },
       ),
     );
   }

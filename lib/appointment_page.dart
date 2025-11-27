@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// 🔹 MODELO DE CITA
+/// ------------------------------------------------------
+/// 🔹 MODELO DE CITA (FINAL CON STATUS)
+/// ------------------------------------------------------
 class Appointment {
   String id;
   String title;
   String doctor;
   DateTime date;
   String notes;
+  String status; // pending o completed
 
   Appointment({
     required this.id,
@@ -15,6 +18,7 @@ class Appointment {
     required this.doctor,
     required this.date,
     required this.notes,
+    required this.status,
   });
 
   Map<String, dynamic> toMap() {
@@ -23,6 +27,7 @@ class Appointment {
       'doctor': doctor,
       'date': date.toIso8601String(),
       'notes': notes,
+      'status': status,
     };
   }
 
@@ -33,11 +38,22 @@ class Appointment {
       doctor: map['doctor'] ?? '',
       date: DateTime.parse(map['date']),
       notes: map['notes'] ?? '',
+      status: map['status'] ?? 'pending',
     );
   }
 }
 
+/// ------------------------------------------------------
+/// 🔹 Función automática de STATUS
+/// ------------------------------------------------------
+String getAutomaticStatus(DateTime apptDate) {
+  final now = DateTime.now();
+  return apptDate.isBefore(now) ? "completed" : "pending";
+}
+
+/// ------------------------------------------------------
 /// 🔹 PÁGINA PRINCIPAL DE CITAS
+/// ------------------------------------------------------
 class AppointmentPage extends StatefulWidget {
   const AppointmentPage({super.key});
 
@@ -69,14 +85,16 @@ class _AppointmentPageState extends State<AppointmentPage> {
         child: RefreshIndicator(
           onRefresh: _refreshAppointments,
           child: StreamBuilder<QuerySnapshot>(
-            stream: appointmentsRef.snapshots(),
+            stream: appointmentsRef.orderBy('date').snapshots(),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF00FFFF)));
-              }
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
 
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+              final appointments = snapshot.data!.docs
+                  .map((doc) =>
+                      Appointment.fromMap(doc.id, doc.data() as Map<String, dynamic>))
+                  .toList();
+
+              if (appointments.isEmpty) {
                 return const Center(
                   child: Text(
                     '⚡ No tienes citas agendadas.',
@@ -85,16 +103,10 @@ class _AppointmentPageState extends State<AppointmentPage> {
                 );
               }
 
-              final appointments = snapshot.data!.docs
-                  .map((doc) => Appointment.fromMap(
-                      doc.id, doc.data() as Map<String, dynamic>))
-                  .toList();
-
               return ListView.builder(
                 itemCount: appointments.length,
                 itemBuilder: (context, index) {
-                  final appt = appointments[index];
-                  return _buildAppointmentCard(context, appt);
+                  return _buildAppointmentCard(context, appointments[index]);
                 },
               );
             },
@@ -104,11 +116,9 @@ class _AppointmentPageState extends State<AppointmentPage> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFF00FFFF),
         onPressed: () async {
-          // 🔹 Esperar a que se cierre la pantalla de crear para refrescar
           await Navigator.push(
             context,
-            MaterialPageRoute(
-                builder: (_) => const CreateEditAppointmentPage()),
+            MaterialPageRoute(builder: (_) => const CreateEditAppointmentPage()),
           );
           setState(() {});
         },
@@ -117,108 +127,52 @@ class _AppointmentPageState extends State<AppointmentPage> {
     );
   }
 
-  /// 🔹 Tarjeta de cita con gestos y botones
   Widget _buildAppointmentCard(BuildContext context, Appointment appt) {
-    return Dismissible(
-      key: Key(appt.id),
-      direction: DismissDirection.endToStart,
-      onDismissed: (direction) async {
-        await appointmentsRef.doc(appt.id).delete();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${appt.title} eliminada')),
-        );
-      },
-      background: Container(
-        color: Colors.redAccent,
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
-        child: const Icon(Icons.delete, color: Colors.white),
-      ),
-      child: GestureDetector(
-        onLongPress: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AppointmentDetailPage(appointment: appt),
-            ),
-          );
-        },
-        child: Card(
-          color: const Color(0xFF1A1A1A),
-          margin: const EdgeInsets.only(bottom: 14),
-          elevation: 6,
-          shadowColor: const Color(0xFF00FFFF),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            leading: const CircleAvatar(
-              backgroundColor: Color(0xFF8A2BE2),
-              child: Icon(Icons.local_hospital, color: Colors.white),
-            ),
-            title: Text(
-              appt.title,
-              style: const TextStyle(
-                  fontWeight: FontWeight.bold, color: Color(0xFFFF00FF)),
-            ),
-            subtitle: Text(
-              '${appt.doctor}\n${appt.date.day}/${appt.date.month}/${appt.date.year} • ${appt.date.hour}:${appt.date.minute.toString().padLeft(2, '0')}',
-              style: const TextStyle(color: Colors.white70),
-            ),
-            isThreeLine: true,
-            trailing: SizedBox(
-              width: 150,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.edit, color: Colors.yellowAccent),
-                    onPressed: () async {
-                      await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              CreateEditAppointmentPage(appointment: appt),
-                        ),
-                      );
-                      setState(() {}); // 🔹 refresca dashboard
-                    },
-                  ),
-                  IconButton(
-                    icon:
-                        const Icon(Icons.remove_red_eye, color: Colors.cyanAccent),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              AppointmentDetailPage(appointment: appt),
-                        ),
-                      );
-                    },
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.redAccent),
-                    onPressed: () async {
-                      await appointmentsRef.doc(appt.id).delete();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('${appt.title} eliminada')),
-                      );
-                    },
-                  ),
-                ],
+    return Card(
+      color: const Color(0xFF1A1A1A),
+      margin: const EdgeInsets.only(bottom: 14),
+      elevation: 6,
+      shadowColor: const Color(0xFF00FFFF),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      child: ListTile(
+        leading: const CircleAvatar(
+          backgroundColor: Color(0xFF8A2BE2),
+          child: Icon(Icons.local_hospital, color: Colors.white),
+        ),
+        title: Text(
+          appt.title,
+          style: const TextStyle(
+              fontWeight: FontWeight.bold, color: Color(0xFFFF00FF)),
+        ),
+        subtitle: Text(
+          '${appt.doctor}\n${appt.date.day}/${appt.date.month}/${appt.date.year} • '
+          '${appt.date.hour}:${appt.date.minute.toString().padLeft(2, '0')}\n'
+          'Estado: ${appt.status}',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        isThreeLine: true,
+        trailing: IconButton(
+          icon: const Icon(Icons.remove_red_eye, color: Colors.cyanAccent),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AppointmentDetailPage(appointment: appt),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
   }
 }
 
+/// ------------------------------------------------------
 /// 🔹 FORMULARIO DE CREAR/EDITAR CITAS
+/// ------------------------------------------------------
 class CreateEditAppointmentPage extends StatefulWidget {
   final Appointment? appointment;
+
   const CreateEditAppointmentPage({this.appointment, super.key});
 
   @override
@@ -226,24 +180,21 @@ class CreateEditAppointmentPage extends StatefulWidget {
       _CreateEditAppointmentPageState();
 }
 
-class _CreateEditAppointmentPageState
-    extends State<CreateEditAppointmentPage> {
+class _CreateEditAppointmentPageState extends State<CreateEditAppointmentPage> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _titleController;
   late TextEditingController _doctorController;
   late TextEditingController _notesController;
+
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
 
   @override
   void initState() {
     super.initState();
-    _titleController =
-        TextEditingController(text: widget.appointment?.title ?? '');
-    _doctorController =
-        TextEditingController(text: widget.appointment?.doctor ?? '');
-    _notesController =
-        TextEditingController(text: widget.appointment?.notes ?? '');
+    _titleController = TextEditingController(text: widget.appointment?.title ?? '');
+    _doctorController = TextEditingController(text: widget.appointment?.doctor ?? '');
+    _notesController = TextEditingController(text: widget.appointment?.notes ?? '');
     _selectedDate = widget.appointment?.date;
     _selectedTime = widget.appointment != null
         ? TimeOfDay(
@@ -274,7 +225,6 @@ class _CreateEditAppointmentPageState
               _buildInputField(_notesController, 'Notas', maxLines: 2),
               const SizedBox(height: 20),
               _buildPickerTile(
-                context,
                 icon: Icons.calendar_today,
                 label: _selectedDate == null
                     ? 'Selecciona fecha'
@@ -290,7 +240,6 @@ class _CreateEditAppointmentPageState
                 },
               ),
               _buildPickerTile(
-                context,
                 icon: Icons.access_time,
                 label: _selectedTime == null
                     ? 'Selecciona hora'
@@ -325,6 +274,8 @@ class _CreateEditAppointmentPageState
                       _selectedTime!.minute,
                     );
 
+                    final status = getAutomaticStatus(finalDate);
+
                     if (widget.appointment == null) {
                       await appointmentsRef.add(Appointment(
                         id: '',
@@ -332,23 +283,24 @@ class _CreateEditAppointmentPageState
                         doctor: _doctorController.text,
                         date: finalDate,
                         notes: _notesController.text,
+                        status: status,
                       ).toMap());
                     } else {
                       await appointmentsRef.doc(widget.appointment!.id).update(
-                            Appointment(
-                              id: widget.appointment!.id,
-                              title: _titleController.text,
-                              doctor: _doctorController.text,
-                              date: finalDate,
-                              notes: _notesController.text,
-                            ).toMap(),
-                          );
+                        Appointment(
+                          id: widget.appointment!.id,
+                          title: _titleController.text,
+                          doctor: _doctorController.text,
+                          date: finalDate,
+                          notes: _notesController.text,
+                          status: status,
+                        ).toMap(),
+                      );
                     }
-                    Navigator.pop(context); // 🔹 vuelve al dashboard
+                    Navigator.pop(context);
                   }
                 },
-                child: Text(
-                    widget.appointment == null ? 'Guardar' : 'Actualizar'),
+                child: Text(widget.appointment == null ? 'Guardar' : 'Actualizar'),
               ),
             ],
           ),
@@ -373,12 +325,11 @@ class _CreateEditAppointmentPageState
           borderSide: BorderSide(color: Color(0xFFFF00FF), width: 2),
         ),
       ),
-      validator: (value) =>
-          value == null || value.isEmpty ? 'Obligatorio' : null,
+      validator: (value) => value == null || value.isEmpty ? 'Obligatorio' : null,
     );
   }
 
-  Widget _buildPickerTile(BuildContext context,
+  Widget _buildPickerTile(
       {required IconData icon,
       required String label,
       required VoidCallback onTap}) {
@@ -390,10 +341,13 @@ class _CreateEditAppointmentPageState
   }
 }
 
+/// ------------------------------------------------------
 /// 🔹 DETALLE DE CITA
+/// ------------------------------------------------------
 class AppointmentDetailPage extends StatelessWidget {
   final Appointment appointment;
-  const AppointmentDetailPage({required this.appointment, super.key});
+
+  const AppointmentDetailPage({super.key, required this.appointment});
 
   @override
   Widget build(BuildContext context) {
@@ -408,32 +362,36 @@ class AppointmentDetailPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(appointment.title,
-                style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFFFF00FF))),
+            Text(
+              appointment.title,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFFFF00FF),
+              ),
+            ),
             const Divider(color: Color(0xFF00FFFF)),
-            _buildDetailRow(Icons.person, 'Médico', appointment.doctor),
-            _buildDetailRow(Icons.calendar_today, 'Fecha',
-                '${appointment.date.day}/${appointment.date.month}/${appointment.date.year}'),
-            _buildDetailRow(Icons.access_time, 'Hora',
-                '${appointment.date.hour}:${appointment.date.minute.toString().padLeft(2, '0')}'),
-            _buildDetailRow(Icons.notes, 'Notas',
-                appointment.notes.isEmpty ? 'Ninguna' : appointment.notes),
+
+            _buildDetail(Icons.person, "Médico", appointment.doctor),
+            _buildDetail(Icons.calendar_today, "Fecha",
+                "${appointment.date.day}/${appointment.date.month}/${appointment.date.year}"),
+            _buildDetail(Icons.access_time, "Hora",
+                "${appointment.date.hour}:${appointment.date.minute.toString().padLeft(2, '0')}"),
+            _buildDetail(Icons.notes, "Notas",
+                appointment.notes.isEmpty ? "Ninguna" : appointment.notes),
+            _buildDetail(Icons.check_circle, "Estado", appointment.status),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDetailRow(IconData icon, String label, String value) {
+  Widget _buildDetail(IconData icon, String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10.0),
+      padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: const Color(0xFFFF00FF), size: 20),
+          Icon(icon, color: const Color(0xFFFF00FF), size: 18),
           const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -441,14 +399,9 @@ class AppointmentDetailPage extends StatelessWidget {
               Text(label,
                   style: const TextStyle(
                       fontWeight: FontWeight.w600, color: Colors.white70)),
-              const SizedBox(height: 2),
-              SizedBox(
-                width: 300,
-                child: Text(value,
-                    style: const TextStyle(fontSize: 16, color: Colors.white)),
-              ),
+              Text(value, style: const TextStyle(color: Colors.white)),
             ],
-          ),
+          )
         ],
       ),
     );

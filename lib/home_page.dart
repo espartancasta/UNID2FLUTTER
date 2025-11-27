@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:intl/intl.dart';
+
 import 'messages_page.dart';
 import 'profile_page.dart';
 import 'settings_page.dart';
 import 'appointment_page.dart';
 import 'tips_page.dart';
+import 'dashboard_page.dart';
+import 'services/graphics_page.dart';
 
 class HomePage extends StatefulWidget {
   final User? user;
@@ -18,7 +19,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
-  final uid = FirebaseAuth.instance.currentUser?.uid;
 
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
@@ -33,7 +33,7 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final userName = widget.user?.displayName ?? 'Usuario';
 
-    final List<Widget> _pages = [
+    final List<Widget> pages = [
       _buildHome(userName),
       const MessagesPage(),
       const ProfilePage(),
@@ -49,7 +49,7 @@ class _HomePageState extends State<HomePage> {
           key: ValueKey(_selectedIndex),
           width: double.infinity,
           height: double.infinity,
-          child: _pages[_selectedIndex],
+          child: pages[_selectedIndex],
         ),
       ),
       bottomNavigationBar: _buildNeonNavbar(),
@@ -110,7 +110,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ------------------------------------------------
-  // HOME + DASHBOARD INTEGRADO
+  // HOME (SIN DASHBOARD INCRUSTADO)
   // ------------------------------------------------
   Widget _buildHome(String name) {
     return SingleChildScrollView(
@@ -119,39 +119,64 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildNeonGreeting(name),
-          const SizedBox(height: 25),
+          const SizedBox(height: 30),
 
-          // 🔥 DASHBOARD ARRIBA
-          _buildDashboardSection(),
-          const SizedBox(height: 25),
+          _buildSectionTitle("Acciones rápidas", Colors.cyanAccent),
+          const SizedBox(height: 16),
 
-          // Botones principales
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildNeonButton(
-                icon: Icons.calendar_today,
-                label: "Agendar Cita",
-                color1: const Color(0xFF6C63FF),
-                color2: const Color(0xFF00FFFF),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => AppointmentPage()),
+          // 🔥 TODOS LOS BOTONES EN UNA SOLA FILA (SCROLL HORIZONTAL)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildNeonButton(
+                  icon: Icons.dashboard_customize,
+                  label: "Dashboard",
+                  color1: const Color(0xFF00FFFF),
+                  color2: const Color(0xFF6C63FF),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const DashboardPage()),
+                  ),
                 ),
-              ),
-              _buildNeonButton(
-                icon: Icons.medical_services_outlined,
-                label: "Consejos",
-                color1: const Color(0xFFFF00FF),
-                color2: const Color(0xFF00FFFF),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => TipsPage()),
+                const SizedBox(width: 12),
+                _buildNeonButton(
+                  icon: Icons.show_chart,
+                  label: "Gráficas",
+                  color1: const Color(0xFF00FFAA),
+                  color2: const Color(0xFF00FFFF),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const GraphicsPage()),
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                _buildNeonButton(
+                  icon: Icons.calendar_today,
+                  label: "Agendar Cita",
+                  color1: const Color(0xFF6C63FF),
+                  color2: const Color(0xFF00FFFF),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AppointmentPage()),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                _buildNeonButton(
+                  icon: Icons.medical_services_outlined,
+                  label: "Consejos",
+                  color1: const Color(0xFFFF00FF),
+                  color2: const Color(0xFF00FFFF),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const TipsPage()),
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 40),
+
+          const SizedBox(height: 35),
 
           _buildSectionTitle("Especialistas", Colors.cyanAccent),
           const SizedBox(height: 10),
@@ -168,76 +193,6 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ------------------------------------------------
-  // DASHBOARD DE CITAS
-  // ------------------------------------------------
-  Widget _buildDashboardSection() {
-    if (uid == null) return const SizedBox();
-
-    final appointmentsQuery = FirebaseFirestore.instance
-        .collection('appointments')
-        .where('doctorId', isEqualTo: uid)
-        .orderBy('date', descending: false);
-
-    return StreamBuilder<QuerySnapshot>(
-      stream: appointmentsQuery.snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) return Center(child: Text('Error: ${snapshot.error}'));
-        if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-
-        final docs = snapshot.data!.docs;
-        final totalAppointments = docs.length;
-        final now = Timestamp.now();
-
-        final upcoming = docs.where((d) {
-          final data = d.data() as Map<String, dynamic>;
-          final ts = data['date'] as Timestamp?;
-          final status = (data['status'] ?? '').toString().toLowerCase();
-          if (ts == null) return false;
-          return ts.compareTo(now) > 0 && status != 'completed' && status != 'cancelled';
-        }).toList();
-
-        final patients = <String>{};
-        for (var d in docs) {
-          final pid = (d.data() as Map<String, dynamic>)['patientId']?.toString() ?? '';
-          if (pid.isNotEmpty) patients.add(pid);
-        }
-
-        final upcomingSorted = List.from(upcoming);
-        upcomingSorted.sort((a, b) {
-          final da = (a.data() as Map<String, dynamic>)['date'] as Timestamp?;
-          final db = (b.data() as Map<String, dynamic>)['date'] as Timestamp?;
-          if (da == null || db == null) return 0;
-          return da.compareTo(db);
-        });
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Row de indicadores
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _statCard('Total citas', totalAppointments.toString(), Icons.calendar_today),
-                _statCard('Citas próximas', upcoming.length.toString(), Icons.schedule),
-                _statCard('Pacientes', patients.length.toString(), Icons.person),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // Próximas citas
-            _buildSectionTitle("Próximas citas", Colors.cyanAccent),
-            const SizedBox(height: 10),
-            for (var i = 0; i < (upcomingSorted.length < 5 ? upcomingSorted.length : 5); i++)
-              _appointmentTile(upcomingSorted[i]),
-            if (upcomingSorted.isEmpty)
-              const Text('No hay citas próximas.', style: TextStyle(color: Colors.white70)),
-          ],
-        );
-      },
-    );
-  }
-
-  // ------------------------------------------------
   // WIDGETS AUXILIARES
   // ------------------------------------------------
   Widget _buildNeonGreeting(String name) {
@@ -249,7 +204,11 @@ class _HomePageState extends State<HomePage> {
       ).createShader(bounds),
       child: Text(
         "¡Hola, $name! ¿En qué podemos ayudarte?",
-        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+        style: const TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
       ),
     );
   }
@@ -266,24 +225,46 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Especialistas con nombre predefinido y SIN flechita
   List<Widget> _buildSpecialists() {
-    final list = ["Cardiólogo", "Dentista", "Pediatra", "Dermatólogo", "Nutriólogo"];
-    return list
-        .map((esp) => Container(
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF1A1A2E), Color(0xFF23234B)],
+    final specialists = [
+      {'especialidad': 'Cardiólogo', 'doctor': 'Dr. Alejandro Cruz'},
+      {'especialidad': 'Dentista', 'doctor': 'Dra. Mariana López'},
+      {'especialidad': 'Pediatra', 'doctor': 'Dr. Luis Herrera'},
+      {'especialidad': 'Dermatólogo', 'doctor': 'Dra. Carla Ruiz'},
+      {'especialidad': 'Nutriólogo', 'doctor': 'Dra. Sofía Jiménez'},
+    ];
+
+    return specialists
+        .map(
+          (esp) => Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF1A1A2E), Color(0xFF23234B)],
+              ),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.blueAccent.withOpacity(0.3),
+                  blurRadius: 8,
                 ),
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [BoxShadow(color: Colors.blueAccent.withOpacity(0.3), blurRadius: 8)],
+              ],
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.person, color: Colors.cyanAccent),
+              title: Text(
+                esp['especialidad']!,
+                style: const TextStyle(color: Colors.white),
               ),
-              child: ListTile(
-                leading: const Icon(Icons.person, color: Colors.cyanAccent),
-                title: Text(esp, style: const TextStyle(color: Colors.white)),
-                trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+              subtitle: Text(
+                esp['doctor']!,
+                style: const TextStyle(color: Colors.white70),
               ),
-            ))
+              // ❌ sin trailing → sin flecha, solo informativo
+            ),
+          ),
+        )
         .toList();
   }
 
@@ -308,7 +289,13 @@ class _HomePageState extends State<HomePage> {
         ),
         onPressed: onPressed,
         icon: Icon(icon, color: Colors.white),
-        label: Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        label: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
     );
   }
@@ -317,9 +304,16 @@ class _HomePageState extends State<HomePage> {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(colors: [Color(0xFF2C2C54), Color(0xFF24243E)]),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2C2C54), Color(0xFF24243E)],
+        ),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.pinkAccent.withOpacity(0.4), blurRadius: 10)],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.pinkAccent.withOpacity(0.4),
+            blurRadius: 10,
+          ),
+        ],
       ),
       child: ListTile(
         leading: const CircleAvatar(
@@ -327,55 +321,9 @@ class _HomePageState extends State<HomePage> {
           child: Icon(Icons.person, color: Colors.white),
         ),
         title: Text(name, style: const TextStyle(color: Colors.white)),
-        subtitle: Text(specialty, style: const TextStyle(color: Colors.white70)),
-      ),
-    );
-  }
-
-  Widget _statCard(String title, String value, IconData icon) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 6),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A1A),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [BoxShadow(color: Colors.white12, blurRadius: 8)],
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 32, color: Colors.cyanAccent),
-            const SizedBox(height: 8),
-            Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-            const SizedBox(height: 6),
-            Text(title, style: const TextStyle(color: Colors.white70)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _appointmentTile(QueryDocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    final ts = data['date'] as Timestamp?;
-    final dateStr = ts != null ? DateFormat('dd/MM/yyyy HH:mm').format(ts.toDate()) : 'Sin fecha';
-    final patientName = data['patientName'] ?? data['patientId'] ?? 'Paciente';
-    final status = data['status'] ?? 'pendiente';
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF222233),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: ListTile(
-        leading: const Icon(Icons.person, color: Colors.white),
-        title: Text(patientName, style: const TextStyle(color: Colors.white)),
-        subtitle: Text('$dateStr • $status', style: const TextStyle(color: Colors.white70)),
-        trailing: IconButton(
-          icon: const Icon(Icons.arrow_forward_ios, color: Colors.white70),
-          onPressed: () {},
+        subtitle: Text(
+          specialty,
+          style: const TextStyle(color: Colors.white70),
         ),
       ),
     );

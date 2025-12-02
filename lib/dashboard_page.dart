@@ -30,6 +30,12 @@ class _DashboardPageState extends State<DashboardPage> {
         .collection('appointments')
         .orderBy('date', descending: false);
 
+    // Stream de pacientes (colección users con role == 'paciente')
+    final patientsStream = FirebaseFirestore.instance
+        .collection('users')
+        .where('role', isEqualTo: 'paciente')
+        .snapshots();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -71,22 +77,13 @@ class _DashboardPageState extends State<DashboardPage> {
                 status != 'cancelled';
           }).toList();
 
-          // Pacientes únicos por patientId (si no tienes este campo se queda en 0 y no truena)
-          final patients = <String>{};
-          for (var d in docs) {
-            final data = d.data() as Map<String, dynamic>;
-            final pid = (data['patientId'] ?? '').toString();
-            if (pid.isNotEmpty) patients.add(pid);
-          }
-          final totalPatients = patients.length;
-
           // Ordenamos las próximas citas por fecha
           final upcomingSorted = List<QueryDocumentSnapshot>.from(upcoming);
           upcomingSorted.sort((a, b) {
-            final da = _parseDate(
-                (a.data() as Map<String, dynamic>)['date']);
-            final db = _parseDate(
-                (b.data() as Map<String, dynamic>)['date']);
+            final da =
+                _parseDate((a.data() as Map<String, dynamic>)['date']);
+            final db =
+                _parseDate((b.data() as Map<String, dynamic>)['date']);
             if (da == null || db == null) return 0;
             return da.compareTo(db);
           });
@@ -104,8 +101,19 @@ class _DashboardPageState extends State<DashboardPage> {
                         Icons.calendar_today),
                     _statCard('Citas próximas', upcoming.length.toString(),
                         Icons.schedule),
-                    _statCard('Pacientes', totalPatients.toString(),
-                        Icons.person),
+
+                    // 🔹 Tarjeta de pacientes leyendo de la colección users
+                    StreamBuilder<QuerySnapshot>(
+                      stream: patientsStream,
+                      builder: (context, patSnapshot) {
+                        int totalPatients = 0;
+                        if (patSnapshot.hasData) {
+                          totalPatients = patSnapshot.data!.docs.length;
+                        }
+                        return _statCard('Pacientes',
+                            totalPatients.toString(), Icons.person);
+                      },
+                    ),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -192,7 +200,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final notes = (data['notes'] ?? '').toString();
     final status = (data['status'] ?? 'pending').toString();
 
-    // Nombre que mostramos en la lista
+    // Nombre que mostramos en la lista (si no tienes nombre de paciente no pasa nada)
     final displayName = data['patientName'] ?? data['patientId'] ?? 'Paciente';
 
     // Construimos el Appointment que usa tu AppointmentDetailPage

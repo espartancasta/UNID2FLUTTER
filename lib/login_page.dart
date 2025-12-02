@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // 🔹 NUEVO
 import 'home_page.dart';
 
 class LoginPage extends StatefulWidget {
@@ -36,9 +37,18 @@ class _LoginPageState extends State<LoginPage> {
         );
       }
     } on FirebaseAuthException catch (e) {
+      String message = "Error al iniciar sesión";
+      if (e.code == 'user-not-found') {
+        message = "Usuario no encontrado. Verifica tu correo.";
+      } else if (e.code == 'wrong-password') {
+        message = "Contraseña incorrecta. Inténtalo de nuevo.";
+      } else if (e.message != null) {
+        message = e.message!;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.message ?? "Error al iniciar sesión"),
+          content: Text(message),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -49,32 +59,154 @@ class _LoginPageState extends State<LoginPage> {
 
   /// ------------------------------
   /// FUNCIÓN PARA REGISTRAR CUENTA
+  /// (con nombre y rol)
   /// ------------------------------
-  Future<void> _register() async {
+  Future<void> _register(String fullName, String role) async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
 
     try {
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
 
+      // 🔹 Guardar usuario en Firestore con rol
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(cred.user!.uid)
+          .set({
+        'name': fullName,
+        'email': _emailController.text.trim(),
+        'role': role, // "paciente" o "medico"
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('✅ Cuenta creada correctamente. Ahora inicia sesión.'),
+          content:
+              Text('✅ Cuenta creada correctamente. Ahora inicia sesión.'),
           backgroundColor: Colors.green,
         ),
       );
     } on FirebaseAuthException catch (e) {
+      String message = "Error al crear la cuenta";
+      if (e.code == 'email-already-in-use') {
+        message = "Este correo ya está registrado.";
+      } else if (e.code == 'weak-password') {
+        message = "La contraseña es muy débil. Usa otra más segura.";
+      } else if (e.message != null) {
+        message = e.message!;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.message ?? "Error al crear la cuenta"),
+          content: Text(message),
           backgroundColor: Colors.redAccent,
         ),
       );
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// ------------------------------
+  /// DIÁLOGO PARA PEDIR NOMBRE Y ROL
+  /// ------------------------------
+  Future<void> _openRegisterDialog() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final nameController = TextEditingController();
+    String? selectedRole;
+    final regKey = GlobalKey<FormState>();
+
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: const Text(
+            'Crear cuenta',
+            style: TextStyle(color: Colors.white),
+          ),
+          content: Form(
+            key: regKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // NOMBRE COMPLETO
+                TextFormField(
+                  controller: nameController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: _neonDecoration(
+                    label: "Nombre completo",
+                    icon: Icons.person,
+                    iconColor: const Color(0xFFFF00FF),
+                  ),
+                  validator: (v) => v == null || v.trim().isEmpty
+                      ? 'Ingresa tu nombre'
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                // ROL (PACIENTE / MÉDICO)
+                DropdownButtonFormField<String>(
+                  value: selectedRole,
+                  dropdownColor: const Color(0xFF1A1A1A),
+                  decoration: _neonDecoration(
+                    label: "Rol",
+                    icon: Icons.badge,
+                    iconColor: const Color(0xFF00FFFF),
+                  ),
+                  style: const TextStyle(color: Colors.white),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'paciente',
+                      child: Text('Paciente'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'medico',
+                      child: Text('Médico'),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    selectedRole = value;
+                  },
+                  validator: (v) =>
+                      v == null ? 'Selecciona un rol' : null,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: Color(0xFF00FFFF)),
+              ),
+            ),
+            TextButton(
+              onPressed: () {
+                if (!regKey.currentState!.validate()) return;
+                if (selectedRole == null) return;
+
+                Navigator.pop(ctx, {
+                  'name': nameController.text.trim(),
+                  'role': selectedRole!,
+                });
+              },
+              child: const Text(
+                'Registrar',
+                style: TextStyle(color: Color(0xFFFF00FF)),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result != null && result['name'] != null && result['role'] != null) {
+      await _register(result['name']!, result['role']!);
     }
   }
 
@@ -147,7 +279,9 @@ class _LoginPageState extends State<LoginPage> {
                         iconColor: const Color(0xFF00FFFF),
                       ),
                       validator: (v) =>
-                          v != null && v.contains('@') ? null : "Correo inválido",
+                          v != null && v.contains('@')
+                              ? null
+                              : "Correo inválido",
                     ),
                     const SizedBox(height: 16),
 
@@ -168,12 +302,15 @@ class _LoginPageState extends State<LoginPage> {
                             color: Colors.white70,
                           ),
                           onPressed: () {
-                            setState(() => _obscurePassword = !_obscurePassword);
+                            setState(
+                                () => _obscurePassword = !_obscurePassword);
                           },
                         ),
                       ),
                       validator: (v) =>
-                          v != null && v.length >= 6 ? null : "Mínimo 6 caracteres",
+                          v != null && v.length >= 6
+                              ? null
+                              : "Mínimo 6 caracteres",
                     ),
                     const SizedBox(height: 28),
 
@@ -188,7 +325,9 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ),
                       child: _loading
-                          ? const CircularProgressIndicator(color: Colors.black)
+                          ? const CircularProgressIndicator(
+                              color: Colors.black,
+                            )
                           : const Text(
                               "Iniciar sesión",
                               style: TextStyle(
@@ -200,9 +339,9 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 14),
 
-                    // BOTÓN REGISTRO
+                    // BOTÓN REGISTRO (abre el diálogo de nombre + rol)
                     TextButton(
-                      onPressed: _loading ? null : _register,
+                      onPressed: _loading ? null : _openRegisterDialog,
                       child: const Text(
                         "Crear cuenta nueva",
                         style: TextStyle(
@@ -256,7 +395,8 @@ class _LoginPageState extends State<LoginPage> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFFFF00FF), width: 2),
+        borderSide:
+            const BorderSide(color: Color(0xFFFF00FF), width: 2),
       ),
     );
   }

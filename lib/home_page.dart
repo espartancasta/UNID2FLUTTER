@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'messages_page.dart';
 import 'profile_page.dart';
@@ -19,6 +20,48 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
+
+  // 🔹 Rol del usuario: 'paciente', 'medico' o 'invitado'
+  String _role = 'invitado';
+  bool _loadingRole = true;
+
+  bool get _isDoctor => _role == 'medico';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserRole();
+  }
+
+  // 🔹 Carga el rol desde Firestore: users/{uid}.role
+  Future<void> _loadUserRole() async {
+    final user = widget.user;
+    if (user == null) {
+      setState(() {
+        _role = 'invitado';
+        _loadingRole = false;
+      });
+      return;
+    }
+
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .get();
+
+      final data = doc.data();
+      setState(() {
+        _role = (data?['role'] ?? 'paciente').toString();
+        _loadingRole = false;
+      });
+    } catch (e) {
+      setState(() {
+        _role = 'paciente';
+        _loadingRole = false;
+      });
+    }
+  }
 
   void _onItemTapped(int index) {
     setState(() => _selectedIndex = index);
@@ -43,15 +86,17 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A0A),
       appBar: _buildNeonAppBar(),
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 250),
-        child: Container(
-          key: ValueKey(_selectedIndex),
-          width: double.infinity,
-          height: double.infinity,
-          child: pages[_selectedIndex],
-        ),
-      ),
+      body: _loadingRole
+          ? const Center(child: CircularProgressIndicator())
+          : AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: Container(
+                key: ValueKey(_selectedIndex),
+                width: double.infinity,
+                height: double.infinity,
+                child: pages[_selectedIndex],
+              ),
+            ),
       bottomNavigationBar: _buildNeonNavbar(),
     );
   }
@@ -110,7 +155,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ------------------------------------------------
-  // HOME (SIN DASHBOARD INCRUSTADO)
+  // HOME
   // ------------------------------------------------
   Widget _buildHome(String name) {
     return SingleChildScrollView(
@@ -119,38 +164,50 @@ class _HomePageState extends State<HomePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildNeonGreeting(name),
+          const SizedBox(height: 8),
+          Text(
+            'Rol: ${_role[0].toUpperCase()}${_role.substring(1)}',
+            style: const TextStyle(color: Colors.white70),
+          ),
           const SizedBox(height: 30),
 
           _buildSectionTitle("Acciones rápidas", Colors.cyanAccent),
           const SizedBox(height: 16),
 
-          // 🔥 TODOS LOS BOTONES EN UNA SOLA FILA (SCROLL HORIZONTAL)
+          // 🔥 BOTONES EN UNA SOLA FILA (SCROLL HORIZONTAL)
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
-                _buildNeonButton(
-                  icon: Icons.dashboard_customize,
-                  label: "Dashboard",
-                  color1: const Color(0xFF00FFFF),
-                  color2: const Color(0xFF6C63FF),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const DashboardPage()),
+                // SOLO MÉDICO → Dashboard
+                if (_isDoctor) ...[
+                  _buildNeonButton(
+                    icon: Icons.dashboard_customize,
+                    label: "Dashboard",
+                    color1: const Color(0xFF00FFFF),
+                    color2: const Color(0xFF6C63FF),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const DashboardPage()),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                _buildNeonButton(
-                  icon: Icons.show_chart,
-                  label: "Gráficas",
-                  color1: const Color(0xFF00FFAA),
-                  color2: const Color(0xFF00FFFF),
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const GraphicsPage()),
+                  const SizedBox(width: 12),
+                  _buildNeonButton(
+                    icon: Icons.show_chart,
+                    label: "Gráficas",
+                    color1: const Color(0xFF00FFAA),
+                    color2: const Color(0xFF00FFFF),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => const GraphicsPage()),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
+                  const SizedBox(width: 12),
+                ],
+
+                // TODOS LOS ROLES → Agendar Cita
                 _buildNeonButton(
                   icon: Icons.calendar_today,
                   label: "Agendar Cita",
@@ -158,10 +215,13 @@ class _HomePageState extends State<HomePage> {
                   color2: const Color(0xFF00FFFF),
                   onPressed: () => Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const AppointmentPage()),
+                    MaterialPageRoute(
+                        builder: (_) => const AppointmentPage()),
                   ),
                 ),
                 const SizedBox(width: 12),
+
+                // TODOS LOS ROLES → Consejos
                 _buildNeonButton(
                   icon: Icons.medical_services_outlined,
                   label: "Consejos",
@@ -261,7 +321,6 @@ class _HomePageState extends State<HomePage> {
                 esp['doctor']!,
                 style: const TextStyle(color: Colors.white70),
               ),
-              // ❌ sin trailing → sin flecha, solo informativo
             ),
           ),
         )
